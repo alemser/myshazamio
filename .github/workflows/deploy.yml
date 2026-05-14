@@ -1,0 +1,111 @@
+name: CI / Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  SERVICE: shazamio-service
+  REGION: europe-west1
+  IMAGE: europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/shazamio/shazamio-service
+
+jobs:
+  # ── Lint & smoke-test ────────────────────────────────────────────────────────
+  lint:
+    name: Lint & type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dev deps
+        run: pip install ruff
+
+      - name: Lint
+        run: ruff check app/
+
+  # ── Build & deploy ───────────────────────────────────────────────────────────
+  deploy:
+    name: Build & Deploy
+    needs: lint
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    permissions:
+      contents: read
+      id-token: write   # required for Workload Identity Federation
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Authenticate to Google Cloud via Workload Identity Federation
+      # (no long-lived service account key stored in GitHub secrets)
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build & push image
+        run: |
+          docker build \
+            --tag "$IMAGE:${{ github.sha }}" \
+            --tag "$IMAGE:latest" \
+            --cache-from "$IMAGE:latest" \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            .
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+        env:
+          DOCKER_BUILDKIT: "1"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --image "$IMAGE:${{ github.sha }}" \
+            --region "$REGION" \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars "API_KEY=${{ secrets.API_KEY }},ENVIRONMENT=production" \
+            --memory 512Mi \
+            --cpu 1 \
+            --concurrency 10 \
+            --min-instances 0 \
+            --max-instances 5 \
+            --timeout 60s \
+            --quiet
+
+      - name: Verify deployment
+        run: |
+          URL=$(gcloud run services describe "$SERVICE" \
+            --region "$REGION" \
+            --format "value(status.url)")
+          echo "Service URL: $URL"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL/health")
+          if [ "$STATUS" != "200" ]; then
+            echo "Health check failed with HTTP $STATUS"
+            exit 1
+          fi
+          echo "Health check passed"
+
+      - name: Summary
+        run: |
+          URL=$(gcloud run services describe "$SERVICE" \
+            --region "$REGION" \
+            --format "value(status.url)")
+          echo "### Deployment complete" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`$IMAGE:${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** $URL" >> $GITHUB_STEP_SUMMARY
