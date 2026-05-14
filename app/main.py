@@ -115,7 +115,6 @@ async def recognize(
 ):
     _verify_api_key(x_api_key)
 
-    # Reject obviously oversized requests early
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > MAX_FILE_BYTES:
         raise HTTPException(
@@ -123,7 +122,6 @@ async def recognize(
             detail=f"File exceeds {settings.max_file_size_mb} MB limit",
         )
 
-    # Validate content type (loose check — octet-stream is allowed for raw uploads)
     ct = (file.content_type or "").split(";")[0].strip().lower()
     if ct and ct not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
@@ -145,7 +143,7 @@ async def recognize(
     if track is None:
         return RecognizeResponse(success=False, track=None)
 
-    logger.info("Matched: %s — %s", track.title, track.artist)
+    logger.info("Matched: %s - %s", track.title, track.artist)
     return RecognizeResponse(success=True, track=track)
 
 
