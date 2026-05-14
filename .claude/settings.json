@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh secret *)",
+      "Bash(gh run *)",
+      "Bash(pip install *)",
+      "Bash(ruff check *)",
+      "Bash(pip3 install *)",
+      "Bash(python3 -m ruff check app/)",
+      "Bash(gcloud config *)",
+      "Bash(brew --version)",
+      "Bash(git commit -m ' *)",
+      "Bash(git remote *)",
+      "Bash(gcloud run *)",
+      "Bash(curl -s https://shazamio-service-35yhqkc5uq-ew.a.run.app/health)"
+    ]
+  }
+}
