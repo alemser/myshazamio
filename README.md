@@ -26,6 +26,7 @@ curl -X POST https://<service-url>/recognize \
     "title": "Bohemian Rhapsody",
     "artist": "Queen",
     "album": "A Night at the Opera",
+    "label": "EMI",
     "release_date": "1975",
     "genres": ["Rock"],
     "cover_url": "https://...",
@@ -33,10 +34,15 @@ curl -X POST https://<service-url>/recognize \
     "apple_music_url": "https://music.apple.com/...",
     "bpm": 144.0,
     "key": "Bb",
-    "isrc": "GBUM71029604"
+    "isrc": "GBUM71029604",
+    "shazam_id": "40333609",
+    "score": 98,
+    "duration_ms": 354000
   }
 }
 ```
+
+**oceano-player:** today the Pi stack uses the subprocess daemon in `oceano-player/internal/recognition/shazamio.go`, which emits one JSON line with `shazam_id`, `title`, `artist`, `album`, `score`, and `duration_ms`. The HTTP `track` object above is a **superset** of that wire shape (same semantics; extra fields for artwork and URLs). When you add a remote “custom provider” client, map `track.shazam_id` → library `shazam_id`, and use `score` / `duration_ms` for `best_score` merge policy parity with the daemon.
 
 **Response (no match):**
 ```json

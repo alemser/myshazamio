@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 MAX_FILE_BYTES = settings.max_file_size_mb * 1024 * 1024
 
 ALLOWED_CONTENT_TYPES = {

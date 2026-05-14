@@ -15,6 +15,14 @@ _ALLOWED_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".mp4", 
 _shazam = Shazam()
 
 
+async def _recognize_path(path: str) -> dict:
+    """Prefer ``recognize`` (same as oceano-player daemon); fall back for older shazamio."""
+    recognize = getattr(_shazam, "recognize", None)
+    if callable(recognize):
+        return await recognize(path)
+    return await _shazam.recognize_song(path)
+
+
 async def recognize_audio(audio_bytes: bytes, filename: str = "audio") -> Optional[TrackMetadata]:
     suffix = _safe_suffix(filename)
     tmp_path = None
@@ -23,13 +31,19 @@ async def recognize_audio(audio_bytes: bytes, filename: str = "audio") -> Option
             tmp.write(audio_bytes)
             tmp_path = tmp.name
 
-        out = await _shazam.recognize_song(tmp_path)
+        out = await _recognize_path(tmp_path)
         track = out.get("track")
         if not track:
             logger.info("No track match in shazam response")
             return None
 
-        return _parse_track(track)
+        title = (track.get("title") or "").strip()
+        artist = (track.get("subtitle") or "").strip()
+        if not title and not artist:
+            logger.info("Shazam track object present but title and artist empty")
+            return None
+
+        return _parse_track(track, out)
     except Exception:
         logger.exception("shazamio recognition failed")
         raise
@@ -43,9 +57,28 @@ def _safe_suffix(filename: str) -> str:
     return ext if ext in _ALLOWED_EXTENSIONS else ".mp3"
 
 
-def _parse_track(track: dict) -> TrackMetadata:
+def _match_score_and_duration(raw: dict) -> tuple[int, int]:
+    score = 0
+    duration_ms = 0
+    matches = raw.get("matches") or []
+    if not matches:
+        return score, duration_ms
+    m0 = matches[0] if isinstance(matches[0], dict) else {}
+    try:
+        score = int(round(float(m0.get("score") or 0)))
+    except (TypeError, ValueError):
+        score = 0
+    try:
+        duration_ms = int(m0.get("length") or 0)
+    except (TypeError, ValueError):
+        duration_ms = 0
+    return score, duration_ms
+
+
+def _parse_track(track: dict, raw: dict) -> TrackMetadata:
     genres = []
-    primary_genre = track.get("genres", {}).get("primary")
+    genres_obj = track.get("genres")
+    primary_genre = genres_obj.get("primary") if isinstance(genres_obj, dict) else None
     if primary_genre:
         genres.append(primary_genre)
 
@@ -87,6 +120,10 @@ def _parse_track(track: dict) -> TrackMetadata:
 
     isrc: Optional[str] = track.get("isrc")
 
+    shazam_id_raw = track.get("key")
+    shazam_id: Optional[str] = str(shazam_id_raw) if shazam_id_raw not in (None, "") else None
+    score, duration_ms = _match_score_and_duration(raw)
+
     return TrackMetadata(
         title=track.get("title"),
         artist=track.get("subtitle"),
@@ -100,4 +137,7 @@ def _parse_track(track: dict) -> TrackMetadata:
         bpm=bpm,
         key=key,
         isrc=isrc,
+        shazam_id=shazam_id,
+        score=score,
+        duration_ms=duration_ms,
     )
