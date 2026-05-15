@@ -57,21 +57,37 @@ def _safe_suffix(filename: str) -> str:
     return ext if ext in _ALLOWED_EXTENSIONS else ".mp3"
 
 
+def _normalize_match_score(raw) -> int:
+    """Map Shazam matches[0].score to 0–100 (same rules as oceano-player shazamio daemon)."""
+    if raw is None:
+        return 0
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return 0
+    if v <= 0:
+        return 0
+    if v <= 1:
+        return min(100, int(round(v * 100)))
+    if v > 100:
+        return 100
+    return int(round(v))
+
+
 def _match_score_and_duration(raw: dict) -> tuple[int, int]:
     score = 0
     duration_ms = 0
     matches = raw.get("matches") or []
-    if not matches:
-        return score, duration_ms
-    m0 = matches[0] if isinstance(matches[0], dict) else {}
-    try:
-        score = int(round(float(m0.get("score") or 0)))
-    except (TypeError, ValueError):
-        score = 0
-    try:
-        duration_ms = int(m0.get("length") or 0)
-    except (TypeError, ValueError):
-        duration_ms = 0
+    if matches:
+        m0 = matches[0] if isinstance(matches[0], dict) else {}
+        score = _normalize_match_score(m0.get("score"))
+        try:
+            duration_ms = int(m0.get("length") or 0)
+        except (TypeError, ValueError):
+            duration_ms = 0
+    elif raw.get("track"):
+        # recognize() often omits matches[] even on success; parity with oceano-player daemon.
+        score = 100
     return score, duration_ms
 
 

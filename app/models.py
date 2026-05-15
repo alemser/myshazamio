@@ -4,7 +4,11 @@ from pydantic import BaseModel, Field
 
 
 class TrackMetadata(BaseModel):
-    """Fields aligned with oceano-player ``internal/recognition/shazamio.go`` daemon JSON."""
+    """Fields aligned with oceano-player ``internal/recognition/shazamio.go`` daemon JSON.
+
+    Intentionally no ``track_number``: ShazamIO ``recognize()`` does not return album
+    position (CD index / vinyl side). See README § Track number (album position).
+    """
 
     title: Optional[str] = None
     artist: Optional[str] = None

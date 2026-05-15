@@ -1,6 +1,6 @@
 # myshazamio
 
-Audio recognition service built on [shazamio](https://github.com/dotX12/shazamio), deployed on Google Cloud Run.
+Audio recognition service built on [ShazamIO](https://github.com/shazamio/ShazamIO) (`shazamio` on PyPI), deployed on Google Cloud Run.
 
 ## Endpoints
 
@@ -42,7 +42,41 @@ curl -X POST https://<service-url>/recognize \
 }
 ```
 
-**oceano-player:** today the Pi stack uses the subprocess daemon in `oceano-player/internal/recognition/shazamio.go`, which emits one JSON line with `shazam_id`, `title`, `artist`, `album`, `score`, and `duration_ms`. The HTTP `track` object above is a **superset** of that wire shape (same semantics; extra fields for artwork and URLs). When you add a remote “custom provider” client, map `track.shazam_id` → library `shazam_id`, and use `score` / `duration_ms` for `best_score` merge policy parity with the daemon.
+**Score semantics (aligned with `oceano-player` shazamio daemon):**
+
+- `matches[0].score` when present: normalized to **0–100** (fractions `0.98` → `98`, values above 100 clamped).
+- When `recognize()` returns `track` but **no** `matches[]` (common): **`score` = 100** — identification succeeded; Shazam did not expose fingerprint confidence in the payload.
+- `duration_ms` from `matches[0].length` when present, else `0`.
+
+### Track number (album position) — intentionally omitted
+
+**Do not add `track_number` to this service’s `/recognize` response** unless you implement a separate, documented enrichment step. That matches what [ShazamIO](https://github.com/shazamio/ShazamIO) actually returns from `Shazam.recognize()` and what `oceano-player` expects from Shazam-based primaries.
+
+| Concept | ShazamIO / this API | Oceano `track_number` |
+|--------|---------------------|------------------------|
+| Shazam track id | `track.key` → `shazam_id` | Stored as `shazam_id`; **not** CD/vinyl index |
+| Position on release (e.g. `"3"`, `"A2"`) | **Not** in `recognize()` JSON | Filled elsewhere (see below) |
+
+**What `recognize()` gives you** (see `ResponseTrack` / `TrackInfo` in ShazamIO):
+
+- `track.title`, `track.subtitle` (artist), `track.key` (numeric Shazam id)
+- `track.sections[]` with `type == "SONG"` and `metadata[]` entries such as **Album**, **Released**, **BPM**, **Key** — there is **no** “Track number” (or equivalent) metadata row in typical recognize payloads
+- Optional top-level `matches[]` (fingerprint match metadata: `score`, `length` as ms) — not album tracklist position
+
+**Where ShazamIO *does* expose `trackNumber`:** other APIs and schemas (e.g. `track_about(track_id)`, artist top songs, playlists) use Apple Music–style `trackNumber` / `discNumber` on catalog objects (`AttributesTopSong` in the library). Those are **not** produced by `recognize()` and are a **second HTTP call** per match. This service does not call them today.
+
+**What Oceano does instead** (correct for physical / Now Playing chips):
+
+1. **Discogs** post-recognition: match title against release `tracklist[].position` → `"3"`, `"A2"`, etc.
+2. **iTunes / MusicBrainz** catalog apply (user or auto-resolve pick)
+3. **Library** `recognition.auto_resolve.infer_track_number`: copy position from another confirmed track on the same album when title/artist match
+4. **User** edits via library API
+
+Primary recognizers (embedded `shazamio` daemon, this HTTP wrapper, ACRCloud, AudD) only supply identity + coarse metadata; **`track_number` on the unified state comes from the library row after enrichment**, not from Shazam clip recognition.
+
+**Custom provider mapping:** if your vendor JSON includes a real release index, map it in `oceano-player` field paths — not via inventing it from `shazam_id`. Do **not** map `track.key` or list index to `track_number`.
+
+**oceano-player:** today the Pi stack uses the subprocess daemon in `oceano-player/internal/recognition/shazamio.go`, which emits one JSON line with `shazam_id`, `title`, `artist`, `album`, `score`, and `duration_ms` (no `track_number`). The HTTP `track` object above is a **superset** of that wire shape (same semantics; extra fields for artwork and URLs). When you add a remote “custom provider” client, map `track.shazam_id` → library `shazam_id`, and use `score` / `duration_ms` for `best_score` merge policy parity with the daemon.
 
 **Response (no match):**
 ```json
