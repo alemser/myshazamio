@@ -78,10 +78,10 @@ jobs:
             --set-env-vars "API_KEY=${{ secrets.API_KEY }},ENVIRONMENT=production" \
             --memory 512Mi \
             --cpu 1 \
-            --concurrency 10 \
+            --concurrency 3 \
             --min-instances 0 \
-            --max-instances 5 \
-            --timeout 60s \
+            --max-instances 1 \
+            --timeout 10s \
             --quiet
 
       - name: Verify deployment
