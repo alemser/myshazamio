@@ -6,7 +6,7 @@ from typing import Optional
 from shazamio import Shazam
 
 from app.models import TrackMetadata
-from app.scoring import match_score_and_duration
+from app.scoring import match_offset_ms, match_score_and_duration
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +109,7 @@ def _parse_track(track: dict, raw: dict) -> TrackMetadata:
     shazam_id_raw = track.get("key")
     shazam_id: Optional[str] = str(shazam_id_raw) if shazam_id_raw not in (None, "") else None
     score, duration_ms = match_score_and_duration(raw)
+    offset_ms = match_offset_ms(raw)
 
     return TrackMetadata(
         title=track.get("title"),
@@ -126,4 +127,5 @@ def _parse_track(track: dict, raw: dict) -> TrackMetadata:
         shazam_id=shazam_id,
         score=score,
         duration_ms=duration_ms,
+        match_offset_ms=offset_ms,
     )

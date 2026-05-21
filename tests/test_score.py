@@ -1,6 +1,6 @@
 import unittest
 
-from app.scoring import match_score_and_duration
+from app.scoring import match_offset_ms, match_score_and_duration
 
 
 class TestMatchScoreAndDuration(unittest.TestCase):
@@ -34,6 +34,10 @@ class TestMatchScoreAndDuration(unittest.TestCase):
         score, dur = match_score_and_duration(raw)
         self.assertEqual(score, 100)
         self.assertEqual(dur, 185000)
+
+    def test_match_offset_from_seconds(self):
+        raw = {"matches": [{"offset": 109.620734375, "length": 279000}], "track": {"title": "T"}}
+        self.assertEqual(match_offset_ms(raw), 109620)
 
 
 if __name__ == "__main__":

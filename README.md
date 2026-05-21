@@ -37,7 +37,8 @@ curl -X POST https://<service-url>/recognize \
     "isrc": "GBUM71029604",
     "shazam_id": "40333609",
     "score": 98,
-    "duration_ms": 354000
+    "duration_ms": 354000,
+    "match_offset_ms": 172000
   }
 }
 ```
@@ -47,6 +48,7 @@ curl -X POST https://<service-url>/recognize \
 - `matches[0].score` when present: normalized to **0–100** (fractions `0.98` → `98`, values above 100 clamped).
 - When `recognize()` returns `track` but **no** `matches[]` (common): **`score` = 100** — identification succeeded; Shazam did not expose fingerprint confidence in the payload.
 - `duration_ms` from `matches[0].length` when present, else `0`.
+- `match_offset_ms` from `matches[0].offset` (seconds × 1000) when present, else `0` — use for progress bar seek on mid-track identification (`oceano-player` custom provider field `track.match_offset_ms`).
 
 ### Track number (album position) — intentionally omitted
 
@@ -76,7 +78,7 @@ Primary recognizers (embedded `shazamio` daemon, this HTTP wrapper, ACRCloud, Au
 
 **Custom provider mapping:** if your vendor JSON includes a real release index, map it in `oceano-player` field paths — not via inventing it from `shazam_id`. Do **not** map `track.key` or list index to `track_number`.
 
-**oceano-player:** today the Pi stack uses the subprocess daemon in `oceano-player/internal/recognition/shazamio.go`, which emits one JSON line with `shazam_id`, `title`, `artist`, `album`, `score`, and `duration_ms` (no `track_number`). The HTTP `track` object above is a **superset** of that wire shape (same semantics; extra fields for artwork and URLs). When you add a remote “custom provider” client, map `track.shazam_id` → library `shazam_id`, and use `score` / `duration_ms` for `best_score` merge policy parity with the daemon.
+**oceano-player:** today the Pi stack uses the subprocess daemon in `oceano-player/internal/recognition/shazamio.go`, which emits one JSON line with `shazam_id`, `title`, `artist`, `album`, `score`, and `duration_ms` (no `track_number`). The HTTP `track` object above is a **superset** of that wire shape (same semantics; extra fields for artwork and URLs). When you add a remote “custom provider” client, map `track.shazam_id` → library `shazam_id`, `track.match_offset_ms` → recognition `match_offset_ms`, and use `score` / `duration_ms` for `best_score` merge policy parity with the daemon.
 
 **Response (no match):**
 ```json

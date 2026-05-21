@@ -26,6 +26,8 @@ class TrackMetadata(BaseModel):
     shazam_id: Optional[str] = None
     score: int = 0
     duration_ms: int = 0
+    # Where in the reference track the capture aligned (ms). From matches[0].offset (seconds).
+    match_offset_ms: int = 0
 
 
 class RecognizeResponse(BaseModel):
