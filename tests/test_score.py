@@ -1,6 +1,6 @@
 import unittest
 
-from app.scoring import match_offset_ms, match_score_and_duration
+from app.scoring import duration_ms_from_payload, match_offset_ms, match_score_and_duration
 
 
 class TestMatchScoreAndDuration(unittest.TestCase):
@@ -38,6 +38,28 @@ class TestMatchScoreAndDuration(unittest.TestCase):
     def test_match_offset_from_seconds(self):
         raw = {"matches": [{"offset": 109.620734375, "length": 279000}], "track": {"title": "T"}}
         self.assertEqual(match_offset_ms(raw), 109620)
+
+    def test_duration_from_track_about_attributes(self):
+        raw = {
+            "title": "Hand in Hand",
+            "attributes": {"durationInMillis": 262000},
+        }
+        self.assertEqual(duration_ms_from_payload(raw), 262000)
+
+    def test_duration_from_section_metadata(self):
+        raw = {
+            "sections": [
+                {
+                    "type": "SONG",
+                    "metadata": [{"title": "Duration", "text": "4:22"}],
+                }
+            ]
+        }
+        self.assertEqual(duration_ms_from_payload(raw), 262000)
+
+    def test_duration_from_track_about_nested_track(self):
+        raw = {"track": {"length": 354000, "title": "T"}}
+        self.assertEqual(duration_ms_from_payload(raw), 354000)
 
 
 if __name__ == "__main__":

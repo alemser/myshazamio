@@ -6,7 +6,7 @@ from typing import Optional
 from shazamio import Shazam
 
 from app.models import TrackMetadata
-from app.scoring import match_offset_ms, match_score_and_duration
+from app.scoring import duration_ms_from_payload, match_offset_ms, match_score_and_duration
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,8 @@ async def recognize_audio(audio_bytes: bytes, filename: str = "audio") -> Option
             logger.info("Shazam track object present but title and artist empty")
             return None
 
-        return _parse_track(track, out)
+        meta = _parse_track(track, out)
+        return await _maybe_fill_duration(meta)
     except Exception:
         logger.exception("shazamio recognition failed")
         raise
@@ -59,6 +60,30 @@ def _safe_suffix(filename: str) -> str:
 
 
 
+
+
+async def _maybe_fill_duration(meta: TrackMetadata) -> TrackMetadata:
+    if meta.duration_ms > 0 or not meta.shazam_id:
+        return meta
+    track_about = getattr(_shazam, "track_about", None)
+    if not callable(track_about):
+        return meta
+    try:
+        track_id = int(meta.shazam_id)
+    except (TypeError, ValueError):
+        return meta
+    try:
+        about = await track_about(track_id=track_id)
+    except Exception:
+        logger.debug("track_about failed for shazam_id=%s", meta.shazam_id, exc_info=True)
+        return meta
+    if not isinstance(about, dict):
+        return meta
+    dur = duration_ms_from_payload(about)
+    if dur <= 0:
+        return meta
+    logger.info("duration fallback via track_about shazam_id=%s duration_ms=%d", meta.shazam_id, dur)
+    return meta.model_copy(update={"duration_ms": dur})
 
 
 def _parse_track(track: dict, raw: dict) -> TrackMetadata:
