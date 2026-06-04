@@ -75,12 +75,14 @@ async def _maybe_fill_duration(meta: TrackMetadata) -> TrackMetadata:
     try:
         about = await track_about(track_id=track_id)
     except Exception:
-        logger.debug("track_about failed for shazam_id=%s", meta.shazam_id, exc_info=True)
+        logger.warning("track_about failed for shazam_id=%s", meta.shazam_id, exc_info=True)
         return meta
     if not isinstance(about, dict):
+        logger.warning("track_about returned non-dict for shazam_id=%s", meta.shazam_id)
         return meta
     dur = duration_ms_from_payload(about)
     if dur <= 0:
+        logger.warning("track_about had no duration for shazam_id=%s title=%r", meta.shazam_id, meta.title)
         return meta
     logger.info("duration fallback via track_about shazam_id=%s duration_ms=%d", meta.shazam_id, dur)
     return meta.model_copy(update={"duration_ms": dur})
@@ -133,7 +135,8 @@ def _parse_track(track: dict, raw: dict) -> TrackMetadata:
 
     shazam_id_raw = track.get("key")
     shazam_id: Optional[str] = str(shazam_id_raw) if shazam_id_raw not in (None, "") else None
-    score, duration_ms = match_score_and_duration(raw)
+    score, _ = match_score_and_duration(raw)
+    duration_ms = duration_ms_from_payload(raw)
     offset_ms = match_offset_ms(raw)
 
     return TrackMetadata(

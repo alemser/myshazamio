@@ -47,7 +47,7 @@ curl -X POST https://<service-url>/recognize \
 
 - `matches[0].score` when present: normalized to **0–100** (fractions `0.98` → `98`, values above 100 clamped).
 - When `recognize()` returns `track` but **no** `matches[]` (common): **`score` = 100** — identification succeeded; Shazam did not expose fingerprint confidence in the payload.
-- `duration_ms` from `matches[0].length` when present, else a **`track_about(shazam_id)`** fallback when `shazam_id` is known.
+- `duration_ms` from `matches[0].length` when present, else **`track.sections` Duration metadata** on the recognize payload, else a **`track_about(shazam_id)`** fallback when `shazam_id` is known.
 - `match_offset_ms` from `matches[0].offset` (seconds × 1000) when present, else `0` — use for progress bar seek on mid-track identification (`oceano-player` custom provider field `track.match_offset_ms`).
 
 ### Track number (album position) — intentionally omitted

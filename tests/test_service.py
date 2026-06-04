@@ -1,5 +1,8 @@
+import sys
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+
+sys.modules.setdefault("shazamio", MagicMock())
 
 from app.models import TrackMetadata
 from app.service import _maybe_fill_duration

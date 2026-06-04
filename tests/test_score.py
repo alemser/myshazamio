@@ -61,6 +61,31 @@ class TestMatchScoreAndDuration(unittest.TestCase):
         raw = {"track": {"length": 354000, "title": "T"}}
         self.assertEqual(duration_ms_from_payload(raw), 354000)
 
+    def test_duration_from_recognize_sections_without_matches_length(self):
+        raw = {
+            "track": {
+                "title": "Walking By Myself",
+                "subtitle": "Gary Moore",
+                "key": "20000000",
+                "sections": [
+                    {
+                        "type": "SONG",
+                        "metadata": [
+                            {"title": "Album", "text": "Still Got the Blues"},
+                            {"title": "Duration", "text": "2:56"},
+                        ],
+                    }
+                ],
+            },
+            "matches": [{"offset": 12.5}],
+        }
+        self.assertEqual(duration_ms_from_payload(raw), 176000)
+
+    def test_match_length_seconds_normalized(self):
+        raw = {"matches": [{"length": 176.5}], "track": {"title": "T"}}
+        _, dur = match_score_and_duration(raw)
+        self.assertEqual(dur, 176500)
+
 
 if __name__ == "__main__":
     unittest.main()

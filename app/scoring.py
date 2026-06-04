@@ -105,9 +105,6 @@ def match_score_and_duration(raw: dict) -> tuple[int, int]:
     matches = raw.get("matches") or []
     if matches:
         m0 = matches[0] if isinstance(matches[0], dict) else {}
-        try:
-            duration_ms = int(m0.get("length") or 0)
-        except (TypeError, ValueError):
-            duration_ms = 0
+        duration_ms = _normalize_duration_value(m0.get("length"))
     score = 100 if raw.get("track") else 0
     return score, duration_ms
