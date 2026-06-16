@@ -29,6 +29,24 @@ class TestParseTrack(unittest.TestCase):
         self.assertEqual(meta.match_offset_ms, 9000)
         self.assertEqual(meta.shazam_id, "20000000")
 
+    def test_null_hub_and_images_do_not_crash(self):
+        raw = {
+            "track": {
+                "title": "Test Song",
+                "subtitle": "Test Artist",
+                "key": "12345",
+                "hub": None,
+                "images": None,
+                "sections": [],
+            },
+            "matches": [],
+        }
+        meta = _parse_track(raw["track"], raw)
+        self.assertEqual(meta.title, "Test Song")
+        self.assertEqual(meta.artist, "Test Artist")
+        self.assertIsNone(meta.cover_url)
+        self.assertIsNone(meta.apple_music_url)
+
 
 if __name__ == "__main__":
     unittest.main()

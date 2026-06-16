@@ -136,9 +136,20 @@ async def recognize(
             detail=f"File exceeds {settings.max_file_size_mb} MB limit",
         )
 
-    logger.info("Recognizing '%s' (%d bytes)", file.filename, len(audio))
+    filename = file.filename or "audio"
+    logger.info("Recognizing %r (%d bytes)", filename, len(audio))
 
-    track = await recognize_audio(audio, file.filename or "audio")
+    try:
+        track = await recognize_audio(audio, filename)
+    except Exception as exc:
+        logger.exception(
+            "Recognition request failed filename=%r bytes=%d error=%s: %s",
+            filename,
+            len(audio),
+            type(exc).__name__,
+            exc,
+        )
+        raise
 
     if track is None:
         return RecognizeResponse(success=False, track=None)
@@ -149,5 +160,11 @@ async def recognize(
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    logger.exception(
+        "Unhandled %s on %s %s: %s",
+        type(exc).__name__,
+        request.method,
+        request.url.path,
+        exc,
+    )
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})

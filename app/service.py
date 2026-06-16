@@ -46,8 +46,14 @@ async def recognize_audio(audio_bytes: bytes, filename: str = "audio") -> Option
 
         meta = _parse_track(track, out)
         return await _maybe_fill_duration(meta)
-    except Exception:
-        logger.exception("shazamio recognition failed")
+    except Exception as exc:
+        logger.exception(
+            "shazamio recognition failed filename=%r bytes=%d error=%s: %s",
+            filename,
+            len(audio_bytes),
+            type(exc).__name__,
+            exc,
+        )
         raise
     finally:
         if tmp_path and os.path.exists(tmp_path):
@@ -100,10 +106,12 @@ def _parse_track(track: dict, raw: dict) -> TrackMetadata:
     album: Optional[str] = None
     release_date: Optional[str] = None
 
-    for section in track.get("sections", []):
-        if section.get("type") != "SONG":
+    for section in track.get("sections") or []:
+        if not isinstance(section, dict) or section.get("type") != "SONG":
             continue
-        for meta in section.get("metadata", []):
+        for meta in section.get("metadata") or []:
+            if not isinstance(meta, dict):
+                continue
             title = meta.get("title", "")
             text = meta.get("text")
             if title == "BPM" and text:
@@ -119,8 +127,13 @@ def _parse_track(track: dict, raw: dict) -> TrackMetadata:
                 release_date = text
 
     apple_music_url: Optional[str] = None
-    for option in track.get("hub", {}).get("options", []):
-        for action in option.get("actions", []):
+    hub = track.get("hub") if isinstance(track.get("hub"), dict) else {}
+    for option in hub.get("options") or []:
+        if not isinstance(option, dict):
+            continue
+        for action in option.get("actions") or []:
+            if not isinstance(action, dict):
+                continue
             uri = action.get("uri", "")
             if action.get("type") == "uri" and "music.apple.com" in uri:
                 apple_music_url = uri
@@ -128,7 +141,7 @@ def _parse_track(track: dict, raw: dict) -> TrackMetadata:
         if apple_music_url:
             break
 
-    images = track.get("images", {})
+    images = track.get("images") if isinstance(track.get("images"), dict) else {}
     cover_url = images.get("coverarthq") or images.get("coverart")
 
     isrc: Optional[str] = track.get("isrc")
