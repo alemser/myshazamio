@@ -4,8 +4,14 @@ import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, Header, HTTPException, Request, UploadFile
+from fastapi.exception_handlers import (
+    http_exception_handler,
+    request_validation_exception_handler,
+)
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
 from app.models import ErrorResponse, HealthResponse, RecognizeResponse
@@ -83,7 +89,13 @@ async def log_requests(request: Request, call_next):
 def _verify_api_key(x_api_key: str | None) -> None:
     if not settings.api_key:
         raise HTTPException(status_code=500, detail="API key not configured on server")
-    if not x_api_key or not secrets.compare_digest(x_api_key, settings.api_key):
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        if not secrets.compare_digest(x_api_key, settings.api_key):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+    except TypeError:
+        # compare_digest rejects non-ASCII keys (e.g. UI redaction bullets "••••ffe3").
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -116,11 +128,15 @@ async def recognize(
     _verify_api_key(x_api_key)
 
     content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > MAX_FILE_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File exceeds {settings.max_file_size_mb} MB limit",
-        )
+    if content_length:
+        try:
+            if int(content_length) > MAX_FILE_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File exceeds {settings.max_file_size_mb} MB limit",
+                )
+        except ValueError:
+            logger.warning("Invalid Content-Length header: %r", content_length)
 
     ct = (file.content_type or "").split(";")[0].strip().lower()
     if ct and ct not in ALLOWED_CONTENT_TYPES:
@@ -150,6 +166,10 @@ async def recognize(
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, RequestValidationError):
+        return await request_validation_exception_handler(request, exc)
+    if isinstance(exc, (HTTPException, StarletteHTTPException)):
+        return await http_exception_handler(request, exc)
     logger.exception(
         "Unhandled %s on %s %s: %s",
         type(exc).__name__,
