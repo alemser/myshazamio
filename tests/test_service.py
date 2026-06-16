@@ -5,7 +5,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 sys.modules.setdefault("shazamio", MagicMock())
 
 from app.models import TrackMetadata
-from app.service import _maybe_fill_duration
+from app.service import _maybe_fill_duration, recognize_audio
+
+
+class TestRecognizeAudio(unittest.IsolatedAsyncioTestCase):
+    @patch("app.service._recognize_path", new_callable=AsyncMock)
+    async def test_shazamio_error_returns_none_not_raise(self, recognize_path):
+        recognize_path.side_effect = RuntimeError("Shazam API unavailable")
+        out = await recognize_audio(b"\x00" * 100, "capture.wav")
+        self.assertIsNone(out)
 
 
 class TestMaybeFillDuration(unittest.IsolatedAsyncioTestCase):

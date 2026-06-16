@@ -81,7 +81,7 @@ jobs:
             --concurrency 3 \
             --min-instances 0 \
             --max-instances 1 \
-            --timeout 10s \
+            --timeout 30s \
             --quiet
 
       - name: Verify deployment

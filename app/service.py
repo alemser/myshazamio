@@ -32,29 +32,57 @@ async def recognize_audio(audio_bytes: bytes, filename: str = "audio") -> Option
             tmp.write(audio_bytes)
             tmp_path = tmp.name
 
-        out = await _recognize_path(tmp_path)
+        try:
+            out = await _recognize_path(tmp_path)
+        except Exception as exc:
+            logger.warning(
+                "ShazamIO recognize failed filename=%r bytes=%d error=%s: %s",
+                filename,
+                len(audio_bytes),
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
+            return None
+
+        if not isinstance(out, dict):
+            logger.warning(
+                "ShazamIO returned non-dict filename=%r type=%s",
+                filename,
+                type(out).__name__,
+            )
+            return None
+
         track = out.get("track")
-        if not track:
-            logger.info("No track match in shazam response")
+        if not isinstance(track, dict):
+            if track:
+                logger.info(
+                    "Shazam track field is not a dict filename=%r type=%s",
+                    filename,
+                    type(track).__name__,
+                )
+            else:
+                logger.info("No track match in shazam response filename=%r", filename)
             return None
 
         title = (track.get("title") or "").strip()
         artist = (track.get("subtitle") or "").strip()
         if not title and not artist:
-            logger.info("Shazam track object present but title and artist empty")
+            logger.info("Shazam track object present but title and artist empty filename=%r", filename)
             return None
 
-        meta = _parse_track(track, out)
-        return await _maybe_fill_duration(meta)
-    except Exception as exc:
-        logger.exception(
-            "shazamio recognition failed filename=%r bytes=%d error=%s: %s",
-            filename,
-            len(audio_bytes),
-            type(exc).__name__,
-            exc,
-        )
-        raise
+        try:
+            meta = _parse_track(track, out)
+            return await _maybe_fill_duration(meta)
+        except Exception as exc:
+            logger.warning(
+                "Failed to parse Shazam track filename=%r error=%s: %s",
+                filename,
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
+            return None
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)

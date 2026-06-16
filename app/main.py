@@ -139,17 +139,7 @@ async def recognize(
     filename = file.filename or "audio"
     logger.info("Recognizing %r (%d bytes)", filename, len(audio))
 
-    try:
-        track = await recognize_audio(audio, filename)
-    except Exception as exc:
-        logger.exception(
-            "Recognition request failed filename=%r bytes=%d error=%s: %s",
-            filename,
-            len(audio),
-            type(exc).__name__,
-            exc,
-        )
-        raise
+    track = await recognize_audio(audio, filename)
 
     if track is None:
         return RecognizeResponse(success=False, track=None)
